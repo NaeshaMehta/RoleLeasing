@@ -1,0 +1,16 @@
+import fs from 'node:fs/promises';
+let html=await fs.readFile('visual-simulation/index.html','utf8');
+await fs.writeFile('.visual_qa/index-before-workbench.html',html);
+await fs.copyFile('visual-simulation/styles.css','.visual_qa/styles-before-workbench.css');
+html=html.replace('<title>Role Leasing · Network Simulation Lab</title>','<title>Role-Leasing Simulation PoC</title>');
+html=html.replace(/<header class="topbar">.*?<\/header>/s,'<header class="topbar"><a class="brand" href="./">ROLE-LEASING <span class="brand-sub">SIMULATION PoC</span></a><div class="header-status"><span id="runStatus">PAUSED</span><span>LOCAL / DISCRETE TICK</span><button id="aboutButton" class="quiet">Model notes</button></div></header>');
+html=html.replace('<div class="eyebrow">THE EXPERIMENT</div><h1>A network that<br>adapts.</h1><p class="intro">Follow the protocol from the first node to the next role holder.</p>','<div class="eyebrow phase-panel-label">SIMULATION PHASES</div>');
+html=html.replace('WORLD SETTINGS','CONFIGURATION').replace('30 nodes · small','30 · 3 per subnet').replace('60 nodes · balanced','60 · 6 per subnet').replace('100 nodes · specification profile','100 · 10 per subnet');
+html=html.replace('<div class="sidebar-foot"><span class="status-dot"></span> LOCAL · REPRODUCIBLE · NO ACCOUNT</div>','<section class="model-parameters"><div class="eyebrow">MODEL PARAMETERS</div><dl><dt>Epoch length</dt><dd>40 ticks</dd><dt>Detection delay</dt><dd>2 ticks</dd><dt>Renewal point</dt><dd>70%</dd><dt>Hysteresis Δ</dt><dd>0.05</dd><dt>Migration λ</dt><dd>0.10</dd></dl></section>');
+html=html.replace('A place for every node.','Node placement').replace('Speed<select','Interval<select').replace('>Slow</option>','>1100 ms</option>').replace('>Normal</option>','>550 ms</option>').replace('>Fast</option>','>180 ms</option>');
+html=html.replace('CHANGE THE CONDITIONS','INJECT EVENT').replace('<h3>Put the protocol to the test.</h3>','');
+html=html.replace('OBSERVE THE RESPONSE','TELEMETRY').replace('<h3>Service & battery over time</h3>','').replace('FOLLOW THE DECISIONS','EVENT LOG').replace('<h3>Protocol journal</h3>','');
+html=html.replace('<div id="eventFeed"','<div class="log-columns"><span>Tick</span><span>Event</span><span>Details</span></div><div id="eventFeed"');
+html=html.replace('<footer>','<details class="lease-table-section"><summary>Role assignment table <span id="assignmentCount">No leases</span></summary><div class="table-scroll"><table class="assignment-table"><thead><tr><th>Scope</th><th>Holder</th><th>Entity type</th><th>State</th><th>Epoch</th><th>Version</th><th>Expiry tick</th><th>Capability</th></tr></thead><tbody id="assignmentRows"></tbody></table></div></details><footer>');
+html=html.replace('A small model.<br>A visible protocol.','Simulation model and assumptions').replace('SELECTED ENTITY','ENTITY INSPECTOR');
+await fs.writeFile('visual-simulation/index.html',html);

@@ -1,0 +1,315 @@
+[
+  {
+    "title": "Decentralized Role-Leasing\nIoT Protocol",
+    "body": "Capability aggregation, temporary role ownership, and recovery\n\nStudent: [Name]    Registration: [Number]\nInstitution: [Institution]    Department: [Department]\nGuide: [Name]",
+    "notes": "Introduce this as a software simulation of coordination in agricultural IoT. The central contribution is selecting temporary role holders using recursive capability, migration costs, and lease rules. The supplied folder does not identify the student, institution, department, or guide, so replace the marked fields before presenting. The implementation and stored experiments support statements about this model, not a deployed farm network. Allow about 18 minutes for slides 1–33 and use the appendix for questions.",
+    "source": "Project.md; simulation/config.py",
+    "kind": "cover"
+  },
+  {
+    "title": "The fixed-assignment problem",
+    "kind": "problem",
+    "notes": "Start with one subnet gateway receiving traffic from nearby sensor nodes. If that holder fails or depletes its energy, an assignment that remains unchanged loses its useful destination. A fixed controller creates a second dependency in the modeled hierarchical baseline. That baseline does attempt replacement when a holder becomes unavailable, provided the controller and a physical route remain available. It does not continuously optimize holder capability. The project investigates whether adaptive role ownership can improve service without excessive switching. The figures are conceptual diagrams of implemented behavior, not deployed field observations.",
+    "source": "simulation/runner.py: control_source; simulation/protocols.py: step; _select_for_role"
+  },
+  {
+    "title": "Baseline, proposed contribution, and objectives",
+    "kind": "comparison",
+    "notes": "Both designs share a predefined hierarchy, physical routes, sensor traffic, and the same energy accounting. In arm A, the hierarchical policy selects a seeded random fixed controller and random eligible holders. They remain fixed until unavailable, and controller loss makes baseline roles unavailable. The proposed policy uses scope representatives, recursive role capability, temporary adaptive leases, renewal, and cost-aware migration. The optional energy gate is an extension rather than the core contribution. Objectives are to preserve role availability, recover when possible, and expose coordination overhead. A versus B is a bundled comparison: the experiment does not isolate leases from all the other policy changes. These algorithms are not a validated networking standard.",
+    "source": "simulation/protocols.py; simulation/runner.py; patent-study/run_patent_study.py"
+  },
+  {
+    "title": "System architecture and hierarchy",
+    "kind": "networkArchitecture",
+    "notes": "Read the diagram from the sensors upward. Physical nodes are organized into ten subnets, then three networks, then one internetwork. The four role names are gateway, anomaly detection, health monitoring, and discoverability. Every parent scope selects one immediate child per role, producing 56 role/scope assignments. At subnet level a holder is a node. At network level a holder is a subnet entity. At the root a holder is a network entity. A container communicates through its first available descendant representative, which can differ from the node chosen by a lower-scope gateway lease. Capability information travels through bottom-up calculations in shared memory. Solid data arrows denote routed sensor and optional aggregate backhaul exchanges on the physical mesh. No membership link automatically creates a physical edge.",
+    "source": "simulation/entities.py; simulation/capability.py; simulation/runner.py: _route_sensor_traffic"
+  },
+  {
+    "title": "Core protocol flow",
+    "kind": "coreFlow",
+    "notes": "Walk through the same order used by RoleSimulationModel. Events and depletion affect availability first, followed by a bottom-up capability refresh. ProtocolEngine updates the epoch, checks holder and lease state, and distinguishes an absent or invalid lease from an active one. Missing ownership takes the assignment path. Existing proposed leases renew when due, and then optional migration evaluates utility and hysteresis before the solar gate. A migration transfers the existing lease object after a successful control exchange. An ordinary grant creates a new active lease only when LEASE_GRANT succeeds. The model harvests energy after policy decisions and before sensor traffic, then checks depletion, refreshes capabilities, and records metrics. This common order makes matched policy experiments interpretable.",
+    "source": "simulation/runner.py: step; simulation/protocols.py: step; _assign; _migrate"
+  },
+  {
+    "title": "Capability aggregation and role selection",
+    "kind": "algorithms",
+    "notes": "The implementation computes leaf vectors, then iterates through subnets, networks, and the root rather than calling a recursive function. It has the same bottom-up dependency as a recursive hierarchy traversal. Gateway scoring uses .40 energy, .35 link quality, and .25 initial normalized degree centrality. Anomaly detection and health monitoring use .50 energy and .50 health, while discoverability uses .34 energy, .33 link quality, and .33 health. Failed nodes return zero capability. Parent vectors use normalized nonnegative child weights, uniform by default. Failed children keep their weight in the denominator. Selection evaluates immediate children that are available and reachable, then chooses maximum known capability with a stable string-ID tie break. Do not imply that the role labels execute real anomaly detection or discovery payload algorithms.",
+    "source": "nodes.py: ROLE_WEIGHTS; simulation/capability.py: refresh_capabilities; weighted_aggregate; simulation/protocols.py: _select_for_role"
+  },
+  {
+    "title": "Role leases and epoch validation",
+    "kind": "epochLifecycle",
+    "notes": "A new lease begins pending and activates after the grant exchange succeeds. Active ownership can renew, migrate, expire, or become invalid. For proposed policy, duration equals minimum plus capability times the lease-duration range, and renewal is checked at .7 of the duration by default. During step processing, an inactive lease, unavailable holder, or epoch mismatch causes _invalidate before _assign. At an epoch boundary the default _advance_epoch invalidates and regrants immediately. With retain_valid_leases_on_epoch, the method instead relabels existing leases with the new epoch. The stored study enables retention. This is local epoch consistency in a single process. There is no implemented receiver-side protocol that rejects delayed stale network messages, and no proof of distributed split-brain safety.",
+    "source": "simulation/leases.py; simulation/protocols.py: step; _advance_epoch; _renew_if_due"
+  },
+  {
+    "title": "Failure detection and recovery sequence",
+    "kind": "recoverySequence",
+    "notes": "The sequence shows a simulated holder failure followed by detection in ProtocolEngine. The configured delay defaults to zero, but is measured from the recorded unavailable time when set. For a container holder, availability is any online descendant, so one failed child need not invalidate the parent holder. Once the delay elapses, the engine invalidates and removes the old lease before selecting a reachable replacement. It sends LEASE_GRANT, constructs the new lease with current epoch, activates it, and records recovery time. If there is no eligible candidate or communication fails, the assignment remains absent for retry on a later step. The solar migration gate does not run in this recovery path. A stale epoch is invalidated by the same in-process check, not by a simulated distributed receiver.",
+    "source": "simulation/protocols.py: step; _invalidate; _assign; simulation/runner.py: holder_unavailable_since"
+  },
+  {
+    "title": "Optional energy-aware migration gate",
+    "kind": "gate",
+    "notes": "Separate this extension from core role management. Emergency recovery calls _assign and bypasses the optional gate. For a discretionary change, candidate utility and hysteresis must already pass. The gate then requires a scope control source, a representative for the candidate, and a physical route. It estimates exact modeled control energy for that route. For each available descendant it projects current energy plus H times constant harvest minus observed mean communication use, clamps to capacity, subtracts reserve, and averages projected usable reserves for a container. The difference between candidate and current reserve must strictly exceed migration energy plus safety margin. Default H is 500 and margin is .01. Route failure or insufficient benefit rejects the optional migration. If the gate passes, _migrate still sends the control exchange before updating ownership. This extrapolation is not a solar or traffic forecast.",
+    "source": "simulation/protocols.py: _consider_cost_aware_migration; _solar_migration_is_worthwhile; _projected_reserve_energy; _migrate"
+  },
+  {
+    "title": "Reproducible four-arm simulation",
+    "kind": "studySetup",
+    "notes": "The stored design has 30 matched seeds from 42 to 71, four scenarios, four arms, and 20,000 ticks per run: 480 runs. Within each seed and scenario the arms share topology and injected events. Cluster separation is 1.5 communication ranges, distance-energy weight is one, backhaul is enabled, and proposed leases retain holders across epochs. C and D use mean configured harvest .0002 with a seeded per-node multiplier between .5 and 1.5. Arm A uses Lease objects internally with horizon-long duration, but has no adaptive leasing policy, renewal, or discretionary migration. Thus its table entry says fixed holders rather than implying there are no Lease objects in code. C minus B isolates harvesting and D minus C isolates the optional gate. Fresh earlier review validation ran 82 tests with Mesa 3.3.1 and two short simulations. The stored 480-run study was checked, not rerun in full.",
+    "source": "patent-study/run_patent_study.py; simulation/config.py; .presentation_build/tests.txt"
+  },
+  {
+    "title": "Results: service, delivery, energy, and lifetime",
+    "kind": "dashboard",
+    "notes": "The four editable charts show normal-scenario means over 30 seeds from the supplied records. CSC is role-state availability, and sensor delivery measures arrival at the subnet gateway. A has CSC .26113 and sensor delivery .15366. B reaches .9999755 and .8338158. C and D both reach one for these metrics in normal. Residual batteries differ because service duration and harvested energy differ. Lifetime shows mean time to first cumulative delivery fraction below .9, restricted to the 20,000-tick horizon. C and D are censored at that horizon, not observed to fail there. Normal B minus A delivery is +68.02 percentage points with paired 95 percent t interval +65.68 to +70.35. The small gate panel shows fewer normal-scenario migrations but slightly more total energy and energy per item. Detailed C/D means and paired intervals are in the appendix. Cross-scenario original plots follow there as well.",
+    "source": "patent-study/results_20000/per_run_metrics.csv; paired_comparison.csv; threshold_crossings.csv"
+  },
+  {
+    "title": "Limitations, novelty hypothesis, and conclusion",
+    "kind": "conclusion",
+    "notes": "The project demonstrates a simulation framework combining recursive capabilities, temporary role leases, epoch handling, and recovery. That combination is the proposed contribution. Scientific novelty and patentability remain hypotheses requiring a separate prior-art search. The hierarchy is predefined, default capability discovery reads global in-memory state, and communication, harvesting, and failures are abstract models. No physical IoT validation, contention, retransmissions, or sensing/CPU energy appears. Epoch validation is in-process, and role availability does not prove that anomaly detection or another task ran. Sensor delivery is only the subnet leg, and only online nodes generate load. The gate reduces migration count in normal but does not show a general energy-efficiency advantage over harvest alone. Next steps are asynchronous messages, real role-task execution, root delivery tracking, calibrated energy, and matched ablations. Pin compatible dependencies: Mesa 3.5.1 breaks model.scenario assignment while Mesa 3.3.1 passed the tested configuration.",
+    "source": "simulation/; requirements.txt; patent-study/results_20000/paired_comparison.csv"
+  },
+  {
+    "title": "Node lifecycle: online, failure, and recovery",
+    "kind": "nodeLifecycle",
+    "body": [],
+    "notes": "The real NodeAgent state machine has exactly two states: online and failed. Construction starts online. A scheduled fail event or the coordinator detecting zero energy invokes fail(). Both paths remove node availability and trigger graph invalidation. Scheduled recover events invoke recover(). Only nodes tracked in _energy_depleted_node_ids can rejoin automatically after solar charging reaches minimum_energy_reserve. Solar charging alone does not repair an explicit scheduled failure. Energy and link degradation update attributes rather than introducing extra states. Role ownership lives in ProtocolEngine.assignments, outside this state machine. A node may be online without holding any role, and becoming online does not guarantee a lease or route. Explain this distinction before discussing role selection.",
+    "source": "nodes.py: NODE_STATES; simulation/runner.py: _fail_energy_empty_nodes; _harvest_solar_energy"
+  },
+  {
+    "title": "Role assignment at the subnet level",
+    "kind": "assignmentLevel",
+    "body": [],
+    "notes": "This is an actual initial proposed-policy snapshot from SimulationConfig(seed=42). At scope network_0_subnet_0, immediate child nodes 0 through 9 compete. The control source is physical node 0. The engine filters unavailable or unreachable representatives and ranks known capability. The initial gateway lease holder is node 4. All four roles happen to select node 4 in this subnet, but the code evaluates each role independently and does not require that coincidence. Displayed node scores are sampled just after initialization and include the tiny control-energy effects of initial grants. Container scores were refreshed before those grants. The numbers illustrate the stored assignment, not a new benchmark. A failed grant would leave the role unassigned.",
+    "source": "simulation/entities.py: scope_candidates; simulation/protocols.py: _select_for_role; _assign",
+    "scope": "network_0_subnet_0"
+  },
+  {
+    "title": "Role assignment at the network level",
+    "kind": "assignmentLevel",
+    "body": [],
+    "notes": "At network_0, candidates are the subnet entities network_0_subnet_0 through network_0_subnet_3. They carry aggregated capability vectors, rather than being evaluated as individual nodes. The observed gateway lease selects subnet 3. The model represents that container physically through node 30, its first available descendant. This representative is not necessarily the subnet gateway selected by a different lease. Anomaly detection, health monitoring, and discoverability choose subnet 0 in this snapshot. Stress that the holder ID is a subnet string at this level. The scope representative still sends the abstract grant over the physical mesh.",
+    "source": "simulation/entities.py: capability; representative_node_id; simulation/protocols.py: _assign",
+    "scope": "network_0"
+  },
+  {
+    "title": "Role assignment at the internetwork level",
+    "kind": "assignmentLevel",
+    "body": [],
+    "notes": "At the internetwork scope, the candidates are network_0, network_1, and network_2. Their capability vectors aggregate their child subnets. In the seed-42 initial proposed run, network_2 holds all four root roles. Its first available descendant is physical node 70. Gateway scores for networks 1 and 2 are close, so show six decimal places to avoid an apparent rounded tie. The max selection tie-breaker is string ID only when score values tie. The root selects a network entity, not a single node across the entire deployment. There is one root scope, so this contributes four of the total 56 role assignments.",
+    "source": "simulation/entities.py: scope_candidates; simulation/capability.py: refresh_capabilities; simulation/protocols.py",
+    "scope": "internetwork"
+  },
+  {
+    "title": "Lease lifecycle and epoch handling",
+    "body": [],
+    "notes": "The transitions library prohibits illegal jumps. New leases start pending and activate. Renewal temporarily enters renewing and updates timing before returning active. Migration enters migrating and replaces holder, epoch, and timing in the same lease object. Expiry or invalidation ends availability. Duration in proposed is 10 + capability times 90 by default, so a .8 score gives 82 ticks and renewal becomes due at 57.4 ticks, checked on integer ticks. Epochs advance every 20 ticks. Default behavior regrants assignments, while retention updates existing epoch labels in place. This is an in-process fencing model, not a distributed stale-message rejection protocol.",
+    "source": "simulation/leases.py; simulation/protocols.py: _advance_epoch; _lease_duration",
+    "kind": "leaseDiagram"
+  },
+  {
+    "title": "Appendix: exact role-management ordering",
+    "kind": "exactAlgorithm",
+    "notes": "This is pseudocode of the implemented proposed-policy step. Epoch rollover occurs before the per-key loop and has a separate configurable retention path. Detection delay can defer handling an unavailable holder. Invalid state, holder failure, or epoch mismatch invalidates and removes the lease, while timed expiry expires and deletes it. If no lease remains, _assign runs and the loop continues, so a freshly assigned lease does not immediately enter optional migration during that same loop iteration. Existing leases renew before discretionary migration. Renewal failure invalidates and can trigger assignment. Optional migration checks cost, hysteresis, and an enabled gate, sends MIGRATE, then updates the same lease object. This is not make-before-break across independent distributed devices.",
+    "source": "simulation/protocols.py: step; _assign; _renew_if_due; _migrate"
+  },
+  {
+    "title": "Service continuity across all scenarios",
+    "kind": "sourcePlot",
+    "notes": "Role availability is a lease/holder proxy. C and D nearly overlap and the gate does not add a demonstrated availability benefit. The image is the genuine supplied study figure. Curves summarize seeds 42–71 with the stored four-arm and four-scenario configuration. Do not generalize beyond the model or reinterpret normalized ticks as hours.",
+    "source": "patent-study/results_20000/capability_service_continuity.png",
+    "image": "patent-study/results_20000/capability_service_continuity.png",
+    "interpretation": "Role availability is a lease/holder proxy. C and D nearly overlap and the gate does not add a demonstrated availability benefit."
+  },
+  {
+    "title": "Sensor delivery across all scenarios",
+    "kind": "sourcePlot",
+    "notes": "Counts measure sensor-to-subnet delivery. They include generated but unrouted items, but only online nodes generate load. The image is the genuine supplied study figure. Curves summarize seeds 42–71 with the stored four-arm and four-scenario configuration. Do not generalize beyond the model or reinterpret normalized ticks as hours.",
+    "source": "patent-study/results_20000/sensor_delivery.png",
+    "image": "patent-study/results_20000/sensor_delivery.png",
+    "interpretation": "Counts measure sensor-to-subnet delivery. They include generated but unrouted items, but only online nodes generate load."
+  },
+  {
+    "title": "Residual battery across all scenarios",
+    "kind": "sourcePlot",
+    "notes": "High battery can coexist with service failure. Communication cost and harvested energy must be interpreted together. The image is the genuine supplied study figure. Curves summarize seeds 42–71 with the stored four-arm and four-scenario configuration. Do not generalize beyond the model or reinterpret normalized ticks as hours.",
+    "source": "patent-study/results_20000/residual_battery.png",
+    "image": "patent-study/results_20000/residual_battery.png",
+    "interpretation": "High battery can coexist with service failure. Communication cost and harvested energy must be interpreted together."
+  },
+  {
+    "title": "Active-node fraction across all scenarios",
+    "kind": "sourcePlot",
+    "notes": "Node survival differs from role continuity and sensor delivery. Network lifetime uses the first active fraction below .5. The image is the genuine supplied study figure. Curves summarize seeds 42–71 with the stored four-arm and four-scenario configuration. Do not generalize beyond the model or reinterpret normalized ticks as hours.",
+    "source": "patent-study/results_20000/active_node_fraction.png",
+    "image": "patent-study/results_20000/active_node_fraction.png",
+    "interpretation": "Node survival differs from role continuity and sensor delivery. Network lifetime uses the first active fraction below .5."
+  },
+  {
+    "title": "Service lifetime and right-censoring",
+    "kind": "sourcePlot",
+    "notes": "No crossing by 20,000 ticks is right-censored. Censored horizons are not observed field failure times. The image is the genuine supplied study figure. Curves summarize seeds 42–71 with the stored four-arm and four-scenario configuration. Do not generalize beyond the model or reinterpret normalized ticks as hours.",
+    "source": "patent-study/results_20000/service_lifetime.png",
+    "image": "patent-study/results_20000/service_lifetime.png",
+    "interpretation": "No crossing by 20,000 ticks is right-censored. Censored horizons are not observed field failure times."
+  },
+  {
+    "title": "Focused C versus D assessment",
+    "kind": "gateEvidence",
+    "notes": "All displayed normal-scenario mean values come from per_run_metrics.csv. D minus C confidence intervals come from paired_comparison.csv, which computes per-seed paired differences with a t interval. Negative migration difference indicates fewer recorded migrations, but positive energy differences indicate more modeled communication energy. In normal the count reduction interval is fully below zero, and energy per item and total communication energy intervals are above zero. CSC difference is zero. Other scenarios do not establish a consistent gate energy benefit: several energy intervals include zero. This is why migration suppression alone must not be called improved energy efficiency. The reported intervals do not correct for all possible multiple comparisons or establish hardware behavior.",
+    "source": "patent-study/results_20000/per_run_metrics.csv; paired_comparison.csv"
+  },
+  {
+    "title": "Implementation references and verification",
+    "kind": "references",
+    "notes": "Primary sources are the active source files and stored experiment records. The original Project.md motivates the design, while FINAL_SPRINT_PLAN.md supersedes older handoff instructions. Library selection is visible through imports: Mesa, transitions, NumPy, Pandas, Matplotlib, and SciPy for the study analyzer. No external prior-art search or patent opinion was performed. The earlier execution passed 82 tests with Mesa 3.3.1, and validated 480 unique run records plus 30 NPZ archives. The current edit changes presentation artifacts only. Existing PDFs remain unchanged by request.",
+    "source": "nodes.py; simulation/; tests/; patent-study/"
+  },
+  {
+    "title": "Viva preparation 1 of 6",
+    "body": [
+      {
+        "q": "Why separate logical hierarchy from physical mesh?",
+        "a": "Membership defines role candidates and aggregation. Physical adjacency determines whether their representatives can actually communicate."
+      },
+      {
+        "q": "How many assignments does the default world require?",
+        "a": "Four roles across ten subnet, three network, and one internetwork scopes: 4 × 14 = 56."
+      },
+      {
+        "q": "Does anomaly_detection execute a detection model?",
+        "a": "No. It is a role label scored from energy and health. No anomaly classifier or sensor-payload detector is implemented."
+      },
+      {
+        "q": "How are node scores calculated?",
+        "a": "ROLE_WEIGHTS defines normalized weighted sums. Gateway uses .40 energy, .35 link quality, and .25 initial degree centrality."
+      }
+    ],
+    "notes": "Use these answers as starting points and point to the named implementation when challenged. Explain assumptions explicitly. If an evaluator asks about measured runtime, radio calibration, deployment security, or statistical coverage beyond these artifacts, state that the repository provides no such evidence. The answers distinguish assignment policy from application service execution and avoid interpreting simulated counters as field measurements.",
+    "source": "simulation/entities.py; simulation/topology.py; simulation/config.py; ProtocolEngine.assignment_keys; nodes.py; simulation/runner.py; nodes.py",
+    "kind": "viva"
+  },
+  {
+    "title": "Viva preparation 2 of 6",
+    "body": [
+      {
+        "q": "What happens to a failed node during aggregation?",
+        "a": "Its capability becomes zero but its child weight remains in the denominator, reducing the parent aggregate."
+      },
+      {
+        "q": "Is the root aggregate the global average node score?",
+        "a": "Not necessarily. Default aggregation averages immediate children at each level, and the networks have unequal descendant counts."
+      },
+      {
+        "q": "How is a container represented on the physical mesh?",
+        "a": "The first available descendant node in its stored order represents it. This is an abstraction rather than optimized representative election."
+      },
+      {
+        "q": "What prevents optional migration oscillation?",
+        "a": "Candidate capability minus weighted migration cost must strictly exceed current capability plus hysteresis. Cooldown and adaptive hysteresis are optional."
+      }
+    ],
+    "notes": "Use these answers as starting points and point to the named implementation when challenged. Explain assumptions explicitly. If an evaluator asks about measured runtime, radio calibration, deployment security, or statistical coverage beyond these artifacts, state that the repository provides no such evidence. The answers distinguish assignment policy from application service execution and avoid interpreting simulated counters as field measurements.",
+    "source": "nodes.py; simulation/capability.py; simulation/capability.py; SimulationConfig.subnet_counts; EntityHierarchy.representative_node_id; ProtocolEngine._consider_cost_aware_migration",
+    "kind": "viva"
+  },
+  {
+    "title": "Viva preparation 3 of 6",
+    "body": [
+      {
+        "q": "How is migration cost different from charged energy?",
+        "a": "The score cost combines estimated messages, transfer, route-based energy, and disruption. Actual router counters charge the modeled exchanges that execute."
+      },
+      {
+        "q": "How do lease renewal and epoch retention interact?",
+        "a": "Renewal updates lease timing at its configured fraction. Without retention, epoch changes regrant leases, potentially occurring before long leases renew."
+      },
+      {
+        "q": "Does epoch fencing solve distributed split-brain?",
+        "a": "No. Epoch labels and invalidation operate in one process. Independent receivers, delayed messages, and stale-epoch rejection are not simulated."
+      },
+      {
+        "q": "Why does routing sometimes choose more hops?",
+        "a": "Dijkstra minimizes quality-weighted cost, so two reliable edges can cost less than one poor edge."
+      }
+    ],
+    "notes": "Use these answers as starting points and point to the named implementation when challenged. Explain assumptions explicitly. If an evaluator asks about measured runtime, radio calibration, deployment security, or statistical coverage beyond these artifacts, state that the repository provides no such evidence. The answers distinguish assignment policy from application service execution and avoid interpreting simulated counters as field measurements.",
+    "source": "calculate_migration_cost; ProtocolEngine._migrate; ProtocolEngine._renew_if_due; _advance_epoch; simulation/protocols.py; simulation/leases.py; NetworkRouter._current_graph; _routes_from",
+    "kind": "viva"
+  },
+  {
+    "title": "Viva preparation 4 of 6",
+    "body": [
+      {
+        "q": "When are cached routes invalidated?",
+        "a": "Failure, recovery, link degradation, and depletion invalidate usable graph and source-route caches."
+      },
+      {
+        "q": "What is the routing complexity caveat?",
+        "a": "Heap-based shortest paths are followed by explicit reconstruction of every destination path. Path storage can dominate textbook distance-only bounds."
+      },
+      {
+        "q": "How is solar energy modeled?",
+        "a": "A constant seeded per-node rate charges batteries up to capacity. Overflow is curtailed, and depleted nodes rejoin after reaching reserve."
+      },
+      {
+        "q": "Can the solar gate block failure recovery?",
+        "a": "No. The gate restricts optional migrations. Assignment after holder failure takes the recovery path instead."
+      }
+    ],
+    "notes": "Use these answers as starting points and point to the named implementation when challenged. Explain assumptions explicitly. If an evaluator asks about measured runtime, radio calibration, deployment security, or statistical coverage beyond these artifacts, state that the repository provides no such evidence. The answers distinguish assignment policy from application service execution and avoid interpreting simulated counters as field measurements.",
+    "source": "simulation/runner.py; NetworkRouter.invalidate_graph; NetworkRouter._routes_from; RoleSimulationModel._harvest_solar_energy; ProtocolEngine.step; _solar_migration_is_worthwhile",
+    "kind": "viva"
+  },
+  {
+    "title": "Viva preparation 5 of 6",
+    "body": [
+      {
+        "q": "What does CSC measure?",
+        "a": "The fraction of required role-time intervals whose lease and holder satisfy role_available. It excludes time zero and does not prove service-task execution."
+      },
+      {
+        "q": "Is sensor delivery measured at the root?",
+        "a": "No. It counts successful sensor items reaching subnet gateways. Optional aggregate backhaul has separate counters."
+      },
+      {
+        "q": "Why can high residual energy coexist with poor service?",
+        "a": "A failed controller or unavailable gateway can suppress traffic and leave nodes alive but unable to provide modeled service."
+      },
+      {
+        "q": "What does right-censored lifetime mean?",
+        "a": "The threshold did not cross during the observation horizon. The horizon is a bound on observation, not a measured failure time."
+      }
+    ],
+    "notes": "Use these answers as starting points and point to the named implementation when challenged. Explain assumptions explicitly. If an evaluator asks about measured runtime, radio calibration, deployment security, or statistical coverage beyond these artifacts, state that the repository provides no such evidence. The answers distinguish assignment policy from application service execution and avoid interpreting simulated counters as field measurements.",
+    "source": "MetricsRecorder.record; ProtocolEngine.role_available; RoleSimulationModel._route_sensor_traffic; simulation/runner.py; stored per_run_metrics.csv; simulation/metrics.py; patent-study/analyze_patent_study.py",
+    "kind": "viva"
+  },
+  {
+    "title": "Viva preparation 6 of 6",
+    "body": [
+      {
+        "q": "Why compare paired seeds?",
+        "a": "The arms share topology and event schedules for each seed/scenario, reducing unrelated world variation in within-seed differences."
+      },
+      {
+        "q": "What does D minus C establish about the gate?",
+        "a": "In the stored study it does not establish an overall delivery or energy-efficiency improvement. Normal delivery is unchanged and energy/item slightly rises."
+      },
+      {
+        "q": "What security mechanisms exist?",
+        "a": "Input validation and state consistency checks exist. Authentication, encryption, authorization, and adversarial-node defenses do not."
+      },
+      {
+        "q": "What should be improved first?",
+        "a": "Define real role-task execution and end-to-end item delivery, then add asynchronous communication and calibrated energy before deployment claims."
+      }
+    ],
+    "notes": "Use these answers as starting points and point to the named implementation when challenged. Explain assumptions explicitly. If an evaluator asks about measured runtime, radio calibration, deployment security, or statistical coverage beyond these artifacts, state that the repository provides no such evidence. The answers distinguish assignment policy from application service execution and avoid interpreting simulated counters as field measurements.",
+    "source": "patent-study/run_patent_study.py; patent-study/results_20000/paired_comparison.csv; simulation/config.py; simulation/leases.py; Architectural recommendation based on implementation",
+    "kind": "viva"
+  }
+]

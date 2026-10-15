@@ -1,0 +1,120 @@
+{
+  "network_0_subnet_0": {
+    "source": 0,
+    "candidates": [
+      {
+        "id": 0,
+        "gateway": 0.739897643264641,
+        "representative": 0
+      },
+      {
+        "id": 1,
+        "gateway": 0.8054832000935577,
+        "representative": 1
+      },
+      {
+        "id": 2,
+        "gateway": 0.8323199210721247,
+        "representative": 2
+      },
+      {
+        "id": 3,
+        "gateway": 0.7491203605335983,
+        "representative": 3
+      },
+      {
+        "id": 4,
+        "gateway": 0.8526623584334446,
+        "representative": 4
+      },
+      {
+        "id": 5,
+        "gateway": 0.7516471599874377,
+        "representative": 5
+      },
+      {
+        "id": 6,
+        "gateway": 0.8028353359671151,
+        "representative": 6
+      },
+      {
+        "id": 7,
+        "gateway": 0.793679217157313,
+        "representative": 7
+      },
+      {
+        "id": 8,
+        "gateway": 0.8303492428223049,
+        "representative": 8
+      },
+      {
+        "id": 9,
+        "gateway": 0.6868944860421723,
+        "representative": 9
+      }
+    ],
+    "holders": {
+      "gateway": 4,
+      "anomaly_detection": 4,
+      "health_monitoring": 4,
+      "discoverability": 4
+    }
+  },
+  "network_0": {
+    "source": 0,
+    "candidates": [
+      {
+        "id": "network_0_subnet_0",
+        "gateway": 0.7845036925373708,
+        "representative": 0
+      },
+      {
+        "id": "network_0_subnet_1",
+        "gateway": 0.8242197821732781,
+        "representative": 10
+      },
+      {
+        "id": "network_0_subnet_2",
+        "gateway": 0.8056237360971756,
+        "representative": 20
+      },
+      {
+        "id": "network_0_subnet_3",
+        "gateway": 0.8306052739773448,
+        "representative": 30
+      }
+    ],
+    "holders": {
+      "gateway": "network_0_subnet_3",
+      "anomaly_detection": "network_0_subnet_0",
+      "health_monitoring": "network_0_subnet_0",
+      "discoverability": "network_0_subnet_0"
+    }
+  },
+  "internetwork": {
+    "source": 0,
+    "candidates": [
+      {
+        "id": "network_0",
+        "gateway": 0.8112381211962923,
+        "representative": 0
+      },
+      {
+        "id": "network_1",
+        "gateway": 0.8237882276688692,
+        "representative": 40
+      },
+      {
+        "id": "network_2",
+        "gateway": 0.8238196349617993,
+        "representative": 70
+      }
+    ],
+    "holders": {
+      "gateway": "network_2",
+      "anomaly_detection": "network_2",
+      "health_monitoring": "network_2",
+      "discoverability": "network_2"
+    }
+  }
+}

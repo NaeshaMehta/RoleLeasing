@@ -1,0 +1,7 @@
+mesa>=3
+transitions
+numpy
+pandas
+matplotlib
+# testing
+pytest
