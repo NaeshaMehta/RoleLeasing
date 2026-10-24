@@ -1,0 +1,69 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.venv-packet/
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.packet_qa/
+.visual_qa/
+.presentation_build/
+
+# Node & Frontend (visual-simulation)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Output & Run Artifacts (Simulation dumps, raw logs, CSVs, generated plots)
+results/
+results*/
+output/
+output*/
+results_*/
+optimization-*/
+archive/
+solar-migration-gate/
+solar-screening/
+*.log
+debug.log
+packet_simulation_output/raw_simulation_events.csv
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.DS_Store
+Thumbs.db

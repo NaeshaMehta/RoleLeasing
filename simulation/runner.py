@@ -36,7 +36,7 @@ class RoleSimulationModel(mesa.Model):
         super().__init__(seed=selected_config.seed)
         self.config = selected_config
         self.protocol = protocol
-        self.scenario = scenario
+        self.scenario_name = scenario
         self.current_epoch = 1
         self.network_lifetime_tick: int | None = None
         self.topology: NetworkTopology = create_topology(self.config)
